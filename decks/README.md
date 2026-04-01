@@ -12,6 +12,7 @@ Expected files:
 Notes:
 
 - Deck workspaces are user output and are gitignored by default. The repository keeps only `decks/README.md` and `decks/.gitkeep`.
+- Deck assembly assumes the relevant source material has already been archived and normalized by preprocessing skills.
 - Review and edit `deck.md` as needed before handing it to a rendering skill.
 - `theme` in `brief.md` is only a style hint string for external skills. It is not backed by an internal theme preset file.
 - Inside `deck.md`, use `##` only for slide boundaries. Use `###` or deeper headings inside a slide body.

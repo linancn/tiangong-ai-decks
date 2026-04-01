@@ -4,33 +4,41 @@ This repository is a reusable system for building reviewable Markdown decks from
 
 ## Mission
 
-- Continuously collect raw material in this repo: markdown notes, PDFs, public GitHub repositories, and related research assets.
+- Continuously collect raw material in this repo: markdown notes, PDFs, spreadsheets, Word documents, slide decks, public GitHub repositories, and related research assets.
 - Normalize those materials into a stable machine-readable content library.
 - Build a reviewable `deck.md` from a brief plus an outline, not by hand-editing finished HTML.
 - Hand the finished `deck.md` to an explicit rendering skill when HTML is needed.
 
 ## Current Scope
 
-V1 supports only:
+The core repository is responsible for:
+
+- stable archive and normalized-content contracts
+- reviewable deck authoring through `brief.md`, `outline.md`, and `deck.md`
+- CLI browsing and deck assembly from normalized sources
+- explicit handoff to rendering skills for final HTML
+
+Common source types on this machine that can be archived through skills or agent workflows:
 
 - `markdown`
 - `pdf`
-- public `github` repository snapshots
-
-V1 explicitly does not support:
-
+- `xlsx`
 - `docx`
 - `pptx`
+- public `github` repository snapshots
+
+Still out of scope for the core repository:
+
 - direct WYSIWYG slide editing
 - a browser-based studio UI
 - fully automated citation extraction from arbitrary page coordinates
 
-Do not introduce `docx` or `pptx` support unless explicitly requested. Keep implementation pressure on generation quality, data contracts, and workflow speed.
+Source-format coverage should expand through skills and contract-preserving workflows, not by adding new file-type-specific core importers unless there is a clear long-term payoff.
 
 ## Architectural Principles
 
 1. Raw sources are immutable once imported.
-2. Normalized content is the contract between importers and deck generation.
+2. Normalized content is the contract between skill-driven archival and deck generation.
 3. `brief.md` and `outline.md` are the primary authoring surfaces.
 4. `deck.md` is the canonical review artifact for a deck. HTML is an external render target, not the source of truth.
 5. Prefer deterministic transforms over opaque magic. If AI is added later, it should generate or revise briefs, outlines, or `deck.md`, not dump final HTML directly.
@@ -40,7 +48,7 @@ Do not introduce `docx` or `pptx` support unless explicitly requested. Keep impl
 
 ### `content/`
 
-- `content/inbox/`: temporary drop zone for new files before import. This directory is intentionally not versioned except for the `.gitkeep` placeholder.
+- `content/inbox/`: temporary drop zone for new files before archival. This directory is intentionally not versioned except for the `.gitkeep` placeholder.
 - `content/sources/<kind>/<year>/<archive-key>/`: immutable imported snapshot plus `meta.json`.
 - `content/normalized/<source-id>.json`: normalized document used by the builder.
 - `content/library/`: future derived artifacts such as facts, quotes, tables, code insights, and visuals.
@@ -59,11 +67,12 @@ Do not introduce `docx` or `pptx` support unless explicitly requested. Keep impl
 
 ## Authoring Rules
 
-### Source Import
+### Source Intake And Archival
 
-- Always import a source before relying on it for a deck.
+- Always archive and normalize a source before relying on it for a deck.
 - New or updated files should be dropped into `content/inbox/` first, not copied directly into `content/sources/`.
-- `content/inbox/` is transient staging only. The default path is `import-inbox`, which should remove successfully archived files from inbox.
+- `content/inbox/` is transient staging only. A preprocessing skill or explicit agent workflow should remove successfully archived files from inbox.
+- Intake and preprocessing are skill-first. The repository does not ship file-type-specific import commands.
 - Archive each imported source under `content/sources/<kind>/<year>/<archive-key>/`.
 - The `archive-key` format is fixed: `<effective-date>--<kind>--<title-slug>--<import-stamp>`.
 - `effective-date` must prefer substantive source date over import time. Resolution order is: content/frontmatter date, then source metadata date, then filename date, then import date fallback.
@@ -81,9 +90,11 @@ Do not introduce `docx` or `pptx` support unless explicitly requested. Keep impl
 - `selectionHints.contentType` from the controlled set: `notes`, `report`, `research`, `spec`, `documentation`, `repository`, `reference`.
 - Preserve the imported original in `content/sources/`.
 - Never overwrite or mutate an imported source snapshot in place.
-- GitHub import in v1 should remain lightweight: repository metadata plus README snapshot is enough unless explicitly expanded.
-- Remote GitHub repositories are the one normal exception to the local-inbox rule. They may be imported directly by URL and should still end up in the same archive structure.
-- PDF import is text-first. Favor extracted text and summaries over layout fidelity.
+- Skills should write `kind` values that match the actual source type, such as `markdown`, `pdf`, `docx`, `pptx`, `xlsx`, or `github`.
+- Remote GitHub repositories are the normal exception to the local-inbox rule. They may be archived directly by URL and should still end up in the same archive structure.
+- PDF-oriented preprocessing should favor extracted text, OCR, and summaries over layout fidelity unless the task explicitly depends on page layout.
+- Spreadsheet-oriented preprocessing should preserve headers, sheet structure, and numeric meaning in normalized output.
+- Document and slide preprocessing should preserve semantic structure, headings, and key textual content in normalized output.
 
 ### Deck Authoring
 
@@ -111,8 +122,9 @@ Use the globally installed skills on this machine as the default capability map 
 
 - `pdf`: default skill for PDF extraction, OCR, text cleanup, and PDF-to-structured-content preparation.
 - `xlsx`: use when source material includes spreadsheet tables or numeric appendices that should be folded into normalized content.
-- `docx`: globally available, but out of scope for repository v1. Only use if the repository scope is explicitly expanded.
-- `pptx`: globally available, but out of scope for repository v1. Only use if the repository scope is explicitly expanded.
+- `docx`: use when source material arrives as Word documents and should be archived into the same normalized-content contract.
+- `pptx`: use when source material arrives as existing slide decks that should be mined, archived, and normalized before reuse.
+- If no dedicated preprocessing skill exists for a source type, the agent must still follow the same archive and normalized-data contracts.
 
 ### Output And Rendering
 
@@ -154,7 +166,7 @@ When an AI agent works in this repo, it should:
 ## Suggested Workflow
 
 1. Intake: place new or changed source files into `content/inbox/`.
-2. Normalize and archive: run `import-inbox` or the appropriate importer/preprocessing skill, parse the inbox files, archive originals into `content/sources/`, write normalized outputs into `content/normalized/`, and clear successful imports from inbox.
+2. Normalize and archive: choose the appropriate preprocessing skill, parse the inbox files or remote source, archive originals into `content/sources/`, write normalized outputs into `content/normalized/`, and clear successful local inbox items.
 3. Compose: when asked for a report or HTML presentation, search the archived and normalized material, select relevant sources, and produce `brief.md`, `outline.md`, `sources.lock.json`, and a reviewable `deck.md`.
 4. Render: turn `deck.md` into final HTML only through an explicit rendering skill such as `frontend-design`.
 

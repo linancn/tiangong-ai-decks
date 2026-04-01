@@ -8,7 +8,7 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "tsc -b",
+    "build": "npm run clean && tsc -b",
     "check": "tsc -b --pretty",
     "clean": "node --input-type=module -e \"import { rmSync } from 'node:fs'; const paths = ['apps/cli/dist','packages/domain/dist','packages/pipeline/dist']; for (const path of paths) rmSync(path, { recursive: true, force: true });\"",
     "cli": "tsx --no-cache apps/cli/src/index.ts",

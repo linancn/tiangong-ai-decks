@@ -8,10 +8,6 @@ export {
   writeDeckArtifacts
 } from "./briefs.js";
 export {
-  importGitHubRepo,
-  importInbox,
-  importMarkdownFile,
-  importPdfFile,
   listNormalizedDocuments
-} from "./importers.js";
+} from "./sources.js";
 export { findProjectRoot, getProjectPaths } from "./project.js";

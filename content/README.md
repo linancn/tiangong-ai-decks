@@ -2,13 +2,14 @@
 
 `content/` stores long-lived source material and normalized artifacts.
 
-- `inbox/`: disposable drop zone for raw files before import. Ignored by Git except for `.gitkeep`.
-- `inbox/` should be emptied by `import-inbox` after successful archival. Failed or unsupported files remain for manual handling.
+- `inbox/`: disposable drop zone for raw files before archival. Ignored by Git except for `.gitkeep`.
+- `inbox/` should be processed by the appropriate preprocessing skill or agent workflow. Successful local imports should be cleared from inbox afterward.
 - `sources/`: immutable imported snapshots grouped by kind and year. Each source lives under `content/sources/<kind>/<year>/<archive-key>/`.
 - `normalized/`: machine-readable documents generated from imported sources.
 - `library/`: future derived facts, quotes, tables, visuals, and code insights.
 - `indexes/`: search and retrieval indexes. Safe to rebuild.
 - User files under these working directories are intentionally gitignored by default. Only scaffolding files such as `.gitkeep` and this README should be versioned.
+- The repository does not parse raw source files itself. Skills and agent workflows should write into this structure.
 
 Archive key format:
 
@@ -26,3 +27,14 @@ Archive metadata contract in `meta.json`:
 - `selectionHints.keywords`
 - `selectionHints.titleAliases`
 - `selectionHints.contentType`
+
+Common source kinds:
+
+- `markdown`
+- `pdf`
+- `docx`
+- `pptx`
+- `xlsx`
+- `github`
+
+Additional skill-defined kinds are acceptable as long as they follow the same contract.

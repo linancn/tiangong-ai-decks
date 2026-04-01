@@ -1,6 +1,29 @@
-export type SourceKind = "markdown" | "pdf" | "github";
-export type ArchiveDateSource = "frontmatter" | "filename" | "pdf-metadata" | "github-api" | "imported";
-export type ArchiveTitleSource = "frontmatter" | "first-heading" | "filename" | "pdf-metadata" | "repo-name";
+export type SourceKind =
+  | "markdown"
+  | "pdf"
+  | "github"
+  | "docx"
+  | "pptx"
+  | "xlsx"
+  | (string & {});
+export type ArchiveDateSource =
+  | "frontmatter"
+  | "filename"
+  | "document-metadata"
+  | "pdf-metadata"
+  | "github-api"
+  | "manual"
+  | "imported"
+  | (string & {});
+export type ArchiveTitleSource =
+  | "frontmatter"
+  | "first-heading"
+  | "filename"
+  | "document-metadata"
+  | "pdf-metadata"
+  | "repo-name"
+  | "manual"
+  | (string & {});
 export type SelectionContentType = "notes" | "report" | "research" | "spec" | "documentation" | "repository" | "reference";
 
 export interface SourceFingerprint {

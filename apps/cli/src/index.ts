@@ -5,10 +5,6 @@ import { Command } from "commander";
 import {
   buildDeckModel,
   createDeckWorkspace,
-  importGitHubRepo,
-  importInbox,
-  importMarkdownFile,
-  importPdfFile,
   listNormalizedDocuments,
   loadDeckBrief,
   loadOrCreateOutline,
@@ -21,66 +17,8 @@ const program = new Command();
 
 program
   .name("tiangong-ai-decks")
-  .description("Build reviewable Markdown decks from markdown, PDF, and GitHub sources.")
+  .description("Build reviewable Markdown decks from normalized source libraries prepared by skills.")
   .version("0.1.0");
-
-program
-  .command("import-md")
-  .description("Import a markdown source into the content library.")
-  .argument("<file>", "Path to a markdown file")
-  .action(async (file: string) => {
-    const result = await importMarkdownFile(file);
-    console.log(`Imported markdown source ${result.id}`);
-    console.log(`Normalized document: ${result.normalizedPath}`);
-  });
-
-program
-  .command("import-pdf")
-  .description("Import a PDF source into the content library.")
-  .argument("<file>", "Path to a PDF file")
-  .action(async (file: string) => {
-    const result = await importPdfFile(file);
-    console.log(`Imported PDF source ${result.id}`);
-    console.log(`Normalized document: ${result.normalizedPath}`);
-  });
-
-program
-  .command("import-github")
-  .description("Import a public GitHub repository snapshot into the content library.")
-  .argument("<repoUrl>", "Repository URL such as https://github.com/owner/repo")
-  .action(async (repoUrl: string) => {
-    const result = await importGitHubRepo(repoUrl);
-    console.log(`Imported GitHub source ${result.id}`);
-    console.log(`Normalized document: ${result.normalizedPath}`);
-  });
-
-program
-  .command("import-inbox")
-  .description("Import supported files from content/inbox/, archive them, and remove successful imports from inbox.")
-  .action(async () => {
-    const result = await importInbox();
-    if (result.imported.length === 0 && result.skipped.length === 0 && result.failed.length === 0) {
-      console.log("No files found in content/inbox.");
-      return;
-    }
-
-    for (const item of result.imported) {
-      console.log(`Imported ${item.id} from ${item.inboxPath}${item.cleared ? "" : " (inbox file not cleared)"}`);
-    }
-
-    for (const item of result.skipped) {
-      console.log(`Skipped ${item.inboxPath}: ${item.reason}`);
-    }
-
-    for (const item of result.failed) {
-      console.log(`Failed ${item.inboxPath}: ${item.error}`);
-    }
-
-    console.log(`Imported ${result.imported.length} item(s).`);
-    if (result.failed.length > 0) {
-      process.exitCode = 1;
-    }
-  });
 
 program
   .command("new-deck")
