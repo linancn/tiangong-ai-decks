@@ -15,12 +15,12 @@ import {
   parseDeckMarkdown,
   renderDeckMarkdown,
   writeDeckArtifacts
-} from "@presentation/pipeline";
+} from "@tiangong-ai-decks/pipeline";
 
 const program = new Command();
 
 program
-  .name("presentation")
+  .name("tiangong-ai-decks")
   .description("Build reviewable Markdown decks from markdown, PDF, and GitHub sources.")
   .version("0.1.0");
 

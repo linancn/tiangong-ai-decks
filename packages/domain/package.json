@@ -1,5 +1,5 @@
 {
-  "name": "@presentation/domain",
+  "name": "@tiangong-ai-decks/domain",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -12,4 +12,3 @@
     }
   }
 }
-

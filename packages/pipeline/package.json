@@ -1,5 +1,5 @@
 {
-  "name": "@presentation/pipeline",
+  "name": "@tiangong-ai-decks/pipeline",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -12,7 +12,7 @@
     }
   },
   "dependencies": {
-    "@presentation/domain": "0.1.0",
+    "@tiangong-ai-decks/domain": "0.1.0",
     "gray-matter": "^4.0.3",
     "pdf-parse": "^1.1.1"
   }

@@ -9,7 +9,7 @@ import type {
   ImportedSource,
   NormalizedDocument,
   SourceKind
-} from "@presentation/domain";
+} from "@tiangong-ai-decks/domain";
 import matter from "gray-matter";
 import pdfParse from "pdf-parse";
 
@@ -399,7 +399,7 @@ async function fetchJson<T>(url: string): Promise<T> {
   const response = await fetch(url, {
     headers: {
       "accept": "application/vnd.github+json",
-      "user-agent": "presentation-cli"
+      "user-agent": "tiangong-ai-decks-cli"
     }
   });
 
@@ -418,7 +418,7 @@ export async function importGitHubRepo(repoUrl: string, startDir = process.cwd()
   const readmeResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}/readme`, {
     headers: {
       "accept": "application/vnd.github.raw+json",
-      "user-agent": "presentation-cli"
+      "user-agent": "tiangong-ai-decks-cli"
     }
   });
 

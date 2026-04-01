@@ -1,15 +1,15 @@
 {
-  "name": "@presentation/cli",
+  "name": "@tiangong-ai-decks/cli",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "bin": {
-    "presentation": "./dist/index.js"
+    "tiangong-ai-decks": "./dist/index.js"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "dependencies": {
-    "@presentation/pipeline": "0.1.0",
+    "@tiangong-ai-decks/pipeline": "0.1.0",
     "commander": "^14.0.1"
   }
 }

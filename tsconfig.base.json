@@ -3,6 +3,15 @@
     "target": "ES2022",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
+    "baseUrl": ".",
+    "paths": {
+      "@tiangong-ai-decks/domain": [
+        "packages/domain/src/index.ts"
+      ],
+      "@tiangong-ai-decks/pipeline": [
+        "packages/pipeline/src/index.ts"
+      ]
+    },
     "strict": true,
     "noEmitOnError": true,
     "declaration": true,
@@ -19,4 +28,3 @@
     ]
   }
 }
-

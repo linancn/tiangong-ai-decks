@@ -8,7 +8,7 @@ import type {
   ArchiveTitleSource,
   SelectionContentType,
   SourceKind
-} from "@presentation/domain";
+} from "@tiangong-ai-decks/domain";
 
 const ARCHIVE_SCHEME_VERSION = "archive-v1";
 const ARCHIVE_KEY_PATTERN = "<effective-date>--<kind>--<title-slug>--<import-stamp>";

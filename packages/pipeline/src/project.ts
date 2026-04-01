@@ -1,7 +1,7 @@
 import { access } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 
-import type { ProjectPaths } from "@presentation/domain";
+import type { ProjectPaths } from "@tiangong-ai-decks/domain";
 
 async function pathExists(path: string): Promise<boolean> {
   try {
@@ -22,7 +22,7 @@ export async function findProjectRoot(startDir = process.cwd()): Promise<string>
 
     const parent = dirname(current);
     if (parent === current) {
-      throw new Error("Could not find project root. Run the command inside the presentation repository.");
+      throw new Error("Could not find project root. Run the command inside the tiangong-ai-decks repository.");
     }
     current = parent;
   }

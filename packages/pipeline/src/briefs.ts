@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 import matter from "gray-matter";
 
-import type { DeckBrief, DeckOutlineSection, NormalizedDocument } from "@presentation/domain";
+import type { DeckBrief, DeckOutlineSection, NormalizedDocument } from "@tiangong-ai-decks/domain";
 
 import { getProjectPaths } from "./project.js";
 import { pickBulletPoints, slugify, stripMarkdown, summarize, writeJson } from "./utils.js";

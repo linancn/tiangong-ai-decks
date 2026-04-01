@@ -1,6 +1,6 @@
-# Presentation
+# tiangong-ai-decks
 
-`presentation` is a reusable presentation workspace. It accumulates raw source material, normalizes it into a stable content model, and builds reviewable `deck.md` files for reports.
+`tiangong-ai-decks` is a reusable workspace for turning source material into reviewable deck drafts and externally rendered HTML reports.
 
 V1 scope is intentionally narrow:
 
@@ -16,7 +16,7 @@ V1 scope is intentionally narrow:
 npm install
 cp README.md content/inbox/
 npm run cli -- import-inbox
-npm run cli -- new-deck project-overview --title "Presentation Project Overview"
+npm run cli -- new-deck project-overview --title "Tiangong AI Decks Overview"
 npm run cli -- list-sources --verbose
 ```
 

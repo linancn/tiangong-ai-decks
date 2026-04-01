@@ -1,4 +1,4 @@
-import type { Deck, DeckBrief, DeckOutlineSection, DeckSlide, NormalizedDocument } from "@presentation/domain";
+import type { Deck, DeckBrief, DeckOutlineSection, DeckSlide, NormalizedDocument } from "@tiangong-ai-decks/domain";
 
 import { pickBulletPoints, slugify, summarize } from "./utils.js";
 
