@@ -109,11 +109,6 @@ Use the globally installed skills on this machine as the default capability map 
 - `theme-factory`: use when the main need is to create or refine reusable presentation themes rather than changing deck content.
 - `brand-guidelines`: use when output must conform to a defined brand system or visual identity.
 
-### Naming Note
-
-- The current machine does not have a globally installed skill named `frontend-dev`.
-- If a session exposes `frontend-dev` as a temporary or aliased skill, treat `frontend-design` as the global installed equivalent for this repository.
-
 ## Design Direction
 
 The project is for reports, not startup landing pages. Generated decks should feel:
