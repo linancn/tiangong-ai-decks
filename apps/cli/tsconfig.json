@@ -11,10 +11,6 @@
   "references": [
     {
       "path": "../../packages/pipeline"
-    },
-    {
-      "path": "../../packages/renderer-html"
     }
   ]
 }
-

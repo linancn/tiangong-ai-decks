@@ -188,7 +188,7 @@ export function parseDeckMarkdown(raw: string): Deck {
     id: data.id?.trim() || slugify(title),
     title,
     subtitle: data.subtitle?.trim() || undefined,
-    theme: data.theme?.trim() || "report-clay",
+    theme: data.theme?.trim() || "editorial-light",
     objective: data.objective?.trim() || "Summarize the imported sources.",
     audience: data.audience?.trim() || "Internal stakeholders",
     generatedAt: data.generatedAt?.trim() || new Date().toISOString(),

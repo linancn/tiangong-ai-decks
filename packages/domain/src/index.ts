@@ -1,19 +1,45 @@
 export type SourceKind = "markdown" | "pdf" | "github";
+export type ArchiveDateSource = "frontmatter" | "filename" | "pdf-metadata" | "github-api" | "imported";
+export type ArchiveTitleSource = "frontmatter" | "first-heading" | "filename" | "pdf-metadata" | "repo-name";
+export type SelectionContentType = "notes" | "report" | "research" | "spec" | "documentation" | "repository" | "reference";
 
 export interface SourceFingerprint {
   checksum: string;
   bytes?: number;
 }
 
+export interface ArchiveNaming {
+  schemeVersion: "archive-v1";
+  archiveKeyPattern: "<effective-date>--<kind>--<title-slug>--<import-stamp>";
+  archiveKey: string;
+  yearBucket: string;
+  effectiveDate: string;
+  effectiveDateSource: ArchiveDateSource;
+  importStamp: string;
+  titleSlug: string;
+  titleSource: ArchiveTitleSource;
+  archiveLabel: string;
+}
+
+export interface SourceSelectionHints {
+  summary: string;
+  keywords: string[];
+  titleAliases: string[];
+  contentType: SelectionContentType;
+}
+
 export interface ImportedSource {
+  schemaVersion: number;
   id: string;
   kind: SourceKind;
   title: string;
+  archive: ArchiveNaming;
   importedAt: string;
   originalName: string;
   originalLocation: string;
   storedPath: string;
   fingerprint?: SourceFingerprint;
+  selectionHints: SourceSelectionHints;
   metadata?: Record<string, unknown>;
 }
 
@@ -32,6 +58,7 @@ export interface Citation {
 }
 
 export interface NormalizedDocument {
+  schemaVersion: number;
   id: string;
   kind: SourceKind;
   title: string;
@@ -92,28 +119,6 @@ export interface Deck {
   slides: DeckSlide[];
 }
 
-export interface ThemeDefinition {
-  id: string;
-  name: string;
-  fonts: {
-    heading: string;
-    body: string;
-    mono: string;
-  };
-  colors: {
-    background: string;
-    backgroundAlt: string;
-    panel: string;
-    panelAlt: string;
-    text: string;
-    muted: string;
-    accent: string;
-    accentSoft: string;
-    border: string;
-    shadow: string;
-  };
-}
-
 export interface ProjectPaths {
   root: string;
   content: string;
@@ -122,5 +127,4 @@ export interface ProjectPaths {
   normalized: string;
   library: string;
   decks: string;
-  presets: string;
 }

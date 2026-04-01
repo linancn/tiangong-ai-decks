@@ -5,11 +5,11 @@ export {
   generateOutline,
   loadDeckBrief,
   loadOrCreateOutline,
-  loadThemeDefinition,
   writeDeckArtifacts
 } from "./briefs.js";
 export {
   importGitHubRepo,
+  importInbox,
   importMarkdownFile,
   importPdfFile,
   listNormalizedDocuments

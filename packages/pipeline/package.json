@@ -14,8 +14,6 @@
   "dependencies": {
     "@presentation/domain": "0.1.0",
     "gray-matter": "^4.0.3",
-    "marked": "^16.4.1",
     "pdf-parse": "^1.1.1"
   }
 }
-

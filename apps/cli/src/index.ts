@@ -1,33 +1,27 @@
 #!/usr/bin/env node
 
-import { readdir } from "node:fs/promises";
-import { join } from "node:path";
-
 import { Command } from "commander";
 
 import {
   buildDeckModel,
   createDeckWorkspace,
   importGitHubRepo,
+  importInbox,
   importMarkdownFile,
   importPdfFile,
   listNormalizedDocuments,
   loadDeckBrief,
-  loadDeckMarkdown,
   loadOrCreateOutline,
-  loadThemeDefinition,
   parseDeckMarkdown,
   renderDeckMarkdown,
-  writeDeckArtifacts,
-  getProjectPaths
+  writeDeckArtifacts
 } from "@presentation/pipeline";
-import { renderDeckHtml } from "@presentation/renderer-html";
 
 const program = new Command();
 
 program
   .name("presentation")
-  .description("Build reviewable Markdown decks and HTML presentations from markdown, PDF, and GitHub sources.")
+  .description("Build reviewable Markdown decks from markdown, PDF, and GitHub sources.")
   .version("0.1.0");
 
 program
@@ -61,11 +55,39 @@ program
   });
 
 program
+  .command("import-inbox")
+  .description("Import supported files from content/inbox/, archive them, and remove successful imports from inbox.")
+  .action(async () => {
+    const result = await importInbox();
+    if (result.imported.length === 0 && result.skipped.length === 0 && result.failed.length === 0) {
+      console.log("No files found in content/inbox.");
+      return;
+    }
+
+    for (const item of result.imported) {
+      console.log(`Imported ${item.id} from ${item.inboxPath}${item.cleared ? "" : " (inbox file not cleared)"}`);
+    }
+
+    for (const item of result.skipped) {
+      console.log(`Skipped ${item.inboxPath}: ${item.reason}`);
+    }
+
+    for (const item of result.failed) {
+      console.log(`Failed ${item.inboxPath}: ${item.error}`);
+    }
+
+    console.log(`Imported ${result.imported.length} item(s).`);
+    if (result.failed.length > 0) {
+      process.exitCode = 1;
+    }
+  });
+
+program
   .command("new-deck")
   .description("Create a new deck workspace with brief and outline scaffolds.")
   .argument("<deckId>", "Deck identifier")
   .option("--title <title>", "Human-readable deck title")
-  .option("--theme <theme>", "Theme id", "report-clay")
+  .option("--theme <theme>", "Render-hint style string written into brief.md", "editorial-light")
   .action(async (deckId: string, options: { title?: string; theme?: string }) => {
     const result = await createDeckWorkspace(deckId, {
       title: options.title,
@@ -77,9 +99,9 @@ program
 
 program
   .command("build")
-  .description("Build a reviewable deck.md and static HTML.")
+  .description("Build a reviewable deck.md from archived sources.")
   .argument("<deckId>", "Deck identifier")
-  .option("--theme <theme>", "Override the theme from brief.md")
+  .option("--theme <theme>", "Override the render-hint style string from brief.md")
   .action(async (deckId: string, options: { theme?: string }) => {
     const documents = await listNormalizedDocuments();
     const { brief } = await loadDeckBrief(deckId);
@@ -91,61 +113,41 @@ program
     const deck = buildDeckModel(deckId, brief, outlineResult.outline, documents);
     const deckMarkdown = renderDeckMarkdown(deck);
     const roundTrippedDeck = parseDeckMarkdown(deckMarkdown);
-    const theme = await loadThemeDefinition(options.theme ?? roundTrippedDeck.theme);
-    const html = renderDeckHtml(roundTrippedDeck, theme);
-    const sourceLock = deck.sourceIds.map((sourceId) => {
+    const sourceLock = roundTrippedDeck.sourceIds.map((sourceId) => {
       const document = documents.find((entry) => entry.id === sourceId);
       return {
         id: sourceId,
         title: document?.title,
         kind: document?.kind,
         importedAt: document?.importedSource.importedAt,
+        effectiveDate: document?.importedSource.archive.effectiveDate,
+        effectiveDateSource: document?.importedSource.archive.effectiveDateSource,
+        archiveLabel: document?.importedSource.archive.archiveLabel,
+        contentType: document?.importedSource.selectionHints.contentType,
+        keywords: document?.importedSource.selectionHints.keywords,
+        summary: document?.summary,
+        titleAliases: document?.importedSource.selectionHints.titleAliases,
         normalizedPath: document ? `content/normalized/${document.id}.json` : undefined
       };
     });
     const artifacts = await writeDeckArtifacts(deckId, {
-      deck: roundTrippedDeck,
       deckMarkdown,
       outline: outlineResult.outline,
-      html,
       sourceLock
     });
 
     console.log(`Built deck ${roundTrippedDeck.id}`);
     console.log(`Outline ${outlineResult.generated ? "generated" : "loaded"} from ${outlineResult.outlinePath}`);
     console.log(`Deck Markdown: ${artifacts.deckMdPath}`);
-    console.log(`HTML output: ${artifacts.htmlPath}`);
-  });
-
-program
-  .command("render-html")
-  .description("Render HTML from an existing deck.md.")
-  .argument("<deckId>", "Deck identifier")
-  .option("--theme <theme>", "Override the theme from deck.md")
-  .action(async (deckId: string, options: { theme?: string }) => {
-    const { deck, deckPath } = await loadDeckMarkdown(deckId);
-    if (options.theme) {
-      deck.theme = options.theme;
-    }
-
-    const theme = await loadThemeDefinition(deck.theme);
-    const html = renderDeckHtml(deck, theme);
-    const artifacts = await writeDeckArtifacts(deckId, {
-      deck,
-      deckMarkdown: renderDeckMarkdown(deck),
-      outline: deck.outline,
-      html,
-      sourceLock: deck.sourceIds.map((sourceId) => ({ id: sourceId }))
-    });
-
-    console.log(`Rendered HTML from ${deckPath}`);
-    console.log(`HTML output: ${artifacts.htmlPath}`);
+    console.log(`Source Lock: ${artifacts.sourceLockPath}`);
+    console.log("HTML rendering is external to this repository. Use an explicit rendering skill against deck.md.");
   });
 
 program
   .command("list-sources")
   .description("List normalized documents currently available to the deck builder.")
-  .action(async () => {
+  .option("--verbose", "Show summary, aliases, and date provenance")
+  .action(async (options: { verbose?: boolean }) => {
     const documents = await listNormalizedDocuments();
     if (documents.length === 0) {
       console.log("No normalized documents found.");
@@ -153,23 +155,24 @@ program
     }
 
     for (const document of documents) {
-      console.log(`${document.id}  |  ${document.kind}  |  ${document.title}`);
-    }
-  });
+      const keywords = document.importedSource.selectionHints.keywords.slice(0, 4).join(", ");
+      console.log(
+        [
+          document.importedSource.archive.effectiveDate,
+          `${document.kind}/${document.importedSource.selectionHints.contentType}`,
+          document.id,
+          document.title,
+          keywords
+        ].filter(Boolean).join("  |  ")
+      );
 
-program
-  .command("list-themes")
-  .description("List available deck themes.")
-  .action(async () => {
-    const paths = await getProjectPaths();
-    const themeDir = join(paths.presets, "themes");
-    const entries = await readdir(themeDir, { withFileTypes: true });
-    for (const entry of entries) {
-      if (!entry.isFile() || !entry.name.endsWith(".json")) {
-        continue;
+      if (options.verbose) {
+        console.log(`  date-source: ${document.importedSource.archive.effectiveDateSource}`);
+        console.log(`  title-source: ${document.importedSource.archive.titleSource}`);
+        console.log(`  archive: ${document.importedSource.archive.archiveLabel}`);
+        console.log(`  aliases: ${document.importedSource.selectionHints.titleAliases.join(", ")}`);
+        console.log(`  summary: ${document.summary}`);
       }
-
-      console.log(entry.name.replace(/\.json$/, ""));
     }
   });
 

@@ -10,9 +10,9 @@
   "scripts": {
     "build": "tsc -b",
     "check": "tsc -b --pretty",
-    "clean": "node --input-type=module -e \"import { rmSync } from 'node:fs'; const paths = ['apps/cli/dist','packages/domain/dist','packages/pipeline/dist','packages/renderer-html/dist']; for (const path of paths) rmSync(path, { recursive: true, force: true });\"",
-    "cli": "tsx apps/cli/src/index.ts",
-    "dev": "tsx apps/cli/src/index.ts",
+    "clean": "node --input-type=module -e \"import { rmSync } from 'node:fs'; const paths = ['apps/cli/dist','packages/domain/dist','packages/pipeline/dist']; for (const path of paths) rmSync(path, { recursive: true, force: true });\"",
+    "cli": "tsx --no-cache apps/cli/src/index.ts",
+    "dev": "tsx --no-cache apps/cli/src/index.ts",
     "verify": "npm run build"
   },
   "devDependencies": {
@@ -21,4 +21,3 @@
     "typescript": "^5.8.3"
   }
 }
-

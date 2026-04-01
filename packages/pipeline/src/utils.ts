@@ -2,6 +2,18 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
+import type {
+  ArchiveDateSource,
+  ArchiveNaming,
+  ArchiveTitleSource,
+  SelectionContentType,
+  SourceKind
+} from "@presentation/domain";
+
+const ARCHIVE_SCHEME_VERSION = "archive-v1";
+const ARCHIVE_KEY_PATTERN = "<effective-date>--<kind>--<title-slug>--<import-stamp>";
+export const CONTENT_SCHEMA_VERSION = 1;
+
 export function slugify(value: string): string {
   return value
     .toLowerCase()
@@ -52,24 +64,97 @@ export function summarize(input: string, maxLength = 260): string {
 }
 
 export function deriveKeywords(input: string, limit = 8): string[] {
+  const lexicalSource = input
+    .replace(/^---[\s\S]*?---\s*/m, " ")
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/`[^`]+`/g, " ")
+    .replace(/https?:\/\/\S+/g, " ")
+    .replace(/\b[a-z]+:\/\/\S+/g, " ");
   const stopwords = new Set([
+    "able",
     "about",
+    "afterward",
+    "again",
+    "against",
+    "almost",
+    "along",
+    "already",
+    "although",
+    "always",
+    "among",
+    "amongst",
+    "and",
+    "another",
+    "anyone",
+    "anything",
+    "around",
     "after",
+    "because",
+    "become",
+    "becomes",
+    "becoming",
+    "beforehand",
     "before",
     "being",
+    "below",
+    "beside",
+    "besides",
+    "between",
+    "beyond",
+    "both",
+    "cannot",
+    "could",
+    "every",
+    "everyone",
+    "everything",
+    "first",
     "from",
+    "further",
+    "here",
+    "however",
     "have",
     "into",
+    "itself",
+    "into",
+    "least",
+    "many",
     "more",
+    "most",
+    "much",
+    "must",
+    "never",
+    "often",
+    "other",
+    "otherwise",
+    "over",
+    "public",
+    "rather",
+    "same",
+    "should",
+    "since",
+    "still",
+    "the",
     "that",
-    "than",
     "their",
+    "than",
     "there",
+    "therefore",
     "these",
     "this",
+    "those",
+    "through",
+    "throughout",
+    "under",
+    "until",
+    "very",
+    "whereas",
     "with",
     "will",
+    "without",
+    "would",
     "your",
+    "yours",
+    "user",
     "what",
     "when",
     "where",
@@ -79,6 +164,15 @@ export function deriveKeywords(input: string, limit = 8): string[] {
     "used",
     "into",
     "also",
+    "any",
+    "are",
+    "can",
+    "for",
+    "get",
+    "make",
+    "made",
+    "may",
+    "not",
     "only",
     "each",
     "some",
@@ -94,13 +188,39 @@ export function deriveKeywords(input: string, limit = 8): string[] {
     "doing",
     "than",
     "across",
+    "across",
+    "cli",
+    "command",
+    "commands",
+    "core",
+    "files",
+    "file",
+    "html",
+    "into",
+    "items",
+    "markdown",
+    "note",
+    "notes",
+    "npm",
+    "presentation",
+    "presentations",
+    "project",
+    "readme",
+    "repo",
+    "repository",
+    "repositories",
     "report",
+    "run",
     "slide",
-    "slides"
+    "slides",
+    "using",
+    "workspace",
+    "workspaces",
+    "would"
   ]);
 
   const counts = new Map<string, number>();
-  for (const word of input.toLowerCase().match(/[a-z][a-z0-9-]{2,}/g) ?? []) {
+  for (const word of lexicalSource.toLowerCase().match(/[a-z][a-z0-9-]{2,}/g) ?? []) {
     if (stopwords.has(word)) {
       continue;
     }
@@ -112,6 +232,48 @@ export function deriveKeywords(input: string, limit = 8): string[] {
     .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
     .slice(0, limit)
     .map(([word]) => word);
+}
+
+export function classifyContentType(input: {
+  kind: SourceKind;
+  title: string;
+  text: string;
+}): SelectionContentType {
+  if (input.kind === "github") {
+    return "repository";
+  }
+
+  const sample = `${input.title}\n${input.text}`.toLowerCase();
+  const rules: Array<{ type: SelectionContentType; pattern: RegExp }> = [
+    {
+      type: "spec",
+      pattern: /\b(rfc|spec|proposal|technical design|design doc|architecture|requirements?|prd)\b/
+    },
+    {
+      type: "research",
+      pattern: /\b(paper|study|research|benchmark|evaluation|experiment|survey|arxiv)\b/
+    },
+    {
+      type: "documentation",
+      pattern: /\b(documentation|docs|guide|manual|handbook|tutorial|readme)\b/
+    },
+    {
+      type: "notes",
+      pattern: /\b(notes|meeting|memo|journal|log|minutes)\b/
+    },
+    {
+      type: "report",
+      pattern: /\b(report|analysis|review|retrospective|postmortem|summary|brief|update)\b/
+    }
+  ];
+
+  for (const rule of rules) {
+    if (rule.pattern.test(sample)) {
+      return rule.type;
+    }
+  }
+
+  return "reference";
 }
 
 export interface MarkdownSectionSeed {
@@ -269,4 +431,132 @@ export function stripMarkdown(input: string): string {
 export async function writeText(path: string, contents: string): Promise<void> {
   await ensureDir(dirname(path));
   await writeFile(path, contents, "utf8");
+}
+
+export function uniqueStrings(values: Array<string | undefined | null>, limit?: number): string[] {
+  const output: string[] = [];
+  for (const value of values) {
+    const normalized = value?.trim();
+    if (!normalized || output.includes(normalized)) {
+      continue;
+    }
+
+    output.push(normalized);
+    if (limit && output.length >= limit) {
+      break;
+    }
+  }
+
+  return output;
+}
+
+export function dateOnly(input: Date | string): string {
+  const value = input instanceof Date ? input : new Date(input);
+  const pad = (entry: number) => entry.toString().padStart(2, "0");
+  return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
+}
+
+function parseCompactDate(value: string): string | undefined {
+  const compact = /^(\d{4})(\d{2})(\d{2})$/.exec(value);
+  if (!compact) {
+    return undefined;
+  }
+
+  return `${compact[1]}-${compact[2]}-${compact[3]}`;
+}
+
+export function coerceDate(value: unknown): string | undefined {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return dateOnly(value);
+  }
+
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  const compact = parseCompactDate(trimmed);
+  if (compact) {
+    return compact;
+  }
+
+  const normalized = trimmed
+    .replace(/^D:/, "")
+    .replace(/[T_]/g, " ")
+    .replace(/[./]/g, "-");
+  const explicit = /^(\d{4})-(\d{2})-(\d{2})/.exec(normalized);
+  if (explicit) {
+    return `${explicit[1]}-${explicit[2]}-${explicit[3]}`;
+  }
+
+  const parsed = new Date(trimmed);
+  if (Number.isNaN(parsed.getTime())) {
+    return undefined;
+  }
+
+  return dateOnly(parsed);
+}
+
+export function extractDateFromFilename(input: string): string | undefined {
+  const normalized = input.replace(/\.[^.]+$/, "");
+  const dashed = /(?:^|[^0-9])(\d{4})[-_](\d{2})[-_](\d{2})(?:[^0-9]|$)/.exec(normalized);
+  if (dashed) {
+    return `${dashed[1]}-${dashed[2]}-${dashed[3]}`;
+  }
+
+  const compact = /(?:^|[^0-9])(\d{8})(?:[^0-9]|$)/.exec(normalized);
+  if (compact) {
+    return parseCompactDate(compact[1]);
+  }
+
+  return undefined;
+}
+
+export function normalizePdfMetadataDate(value: unknown): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const compact = /^D:(\d{4})(\d{2})(\d{2})/.exec(value);
+  if (compact) {
+    return `${compact[1]}-${compact[2]}-${compact[3]}`;
+  }
+
+  return coerceDate(value);
+}
+
+export function trimSlug(value: string, maxLength = 48): string {
+  return value.length <= maxLength ? value : value.slice(0, maxLength).replace(/-+$/g, "");
+}
+
+export function deriveArchiveNaming(input: {
+  kindLabel: string;
+  title: string;
+  importedAt: string;
+  effectiveDate?: string;
+  effectiveDateSource?: ArchiveDateSource;
+  titleSource: ArchiveTitleSource;
+}): ArchiveNaming {
+  const effectiveDate = input.effectiveDate ?? dateOnly(input.importedAt);
+  const effectiveDateSource = input.effectiveDateSource ?? "imported";
+  const importStamp = timestampId(new Date(input.importedAt));
+  const titleSlug = trimSlug(slugify(input.title) || input.kindLabel || "source");
+  const archiveKey = `${effectiveDate}--${input.kindLabel}--${titleSlug}--${importStamp}`;
+
+  return {
+    schemeVersion: ARCHIVE_SCHEME_VERSION,
+    archiveKeyPattern: ARCHIVE_KEY_PATTERN,
+    archiveKey,
+    yearBucket: effectiveDate.slice(0, 4),
+    effectiveDate,
+    effectiveDateSource,
+    importStamp,
+    titleSlug,
+    titleSource: input.titleSource,
+    archiveLabel: `${effectiveDate} | ${input.title} | ${input.kindLabel}`
+  };
 }

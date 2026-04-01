@@ -37,7 +37,6 @@ export async function getProjectPaths(startDir = process.cwd()): Promise<Project
     sources: join(root, "content", "sources"),
     normalized: join(root, "content", "normalized"),
     library: join(root, "content", "library"),
-    decks: join(root, "decks"),
-    presets: join(root, "presets")
+    decks: join(root, "decks")
   };
 }

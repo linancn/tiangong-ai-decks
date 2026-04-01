@@ -6,6 +6,7 @@ coverage/
 
 content/indexes/*
 content/tmp/*
+content/inbox/*
+!content/inbox/.gitkeep
 decks/*/dist/
 decks/*/.cache/
-

@@ -3,10 +3,10 @@ import { join } from "node:path";
 
 import matter from "gray-matter";
 
-import type { Deck, DeckBrief, DeckOutlineSection, NormalizedDocument, ThemeDefinition } from "@presentation/domain";
+import type { DeckBrief, DeckOutlineSection, NormalizedDocument } from "@presentation/domain";
 
 import { getProjectPaths } from "./project.js";
-import { pickBulletPoints, readJson, slugify, stripMarkdown, summarize, writeJson } from "./utils.js";
+import { pickBulletPoints, slugify, stripMarkdown, summarize, writeJson } from "./utils.js";
 
 async function exists(path: string): Promise<boolean> {
   try {
@@ -40,7 +40,7 @@ export async function createDeckWorkspace(
   const briefPath = join(deckDir, "brief.md");
   if (!(await exists(briefPath))) {
     const title = options.title ?? "Untitled deck";
-    const theme = options.theme ?? "report-clay";
+    const theme = options.theme ?? "editorial-light";
     const briefTemplate = `---
 title: "${title}"
 subtitle: ""
@@ -116,7 +116,7 @@ export async function loadDeckBrief(deckId: string, startDir = process.cwd()): P
     : "Internal stakeholders";
   const theme = typeof data.theme === "string" && data.theme.trim()
     ? data.theme.trim()
-    : "report-clay";
+    : "editorial-light";
   const sourceIds = Array.isArray(data.sources)
     ? data.sources.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0)
     : [];
@@ -318,40 +318,37 @@ export function renderOutlineMarkdown(outline: DeckOutlineSection[]): string {
   return ["# Outline", "", ...blocks].join("\n").trim() + "\n";
 }
 
-export async function loadThemeDefinition(themeId: string, startDir = process.cwd()): Promise<ThemeDefinition> {
-  const paths = await getProjectPaths(startDir);
-  const themePath = join(paths.presets, "themes", `${themeId}.json`);
-  return await readJson<ThemeDefinition>(themePath);
-}
-
 export async function writeDeckArtifacts(
   deckId: string,
   payload: {
-    deck: Deck;
     deckMarkdown: string;
     outline: DeckOutlineSection[];
-    html: string;
     sourceLock: Array<{
       id: string;
       title?: string;
       kind?: string;
       importedAt?: string;
+      effectiveDate?: string;
+      effectiveDateSource?: string;
+      archiveLabel?: string;
+      contentType?: string;
+      keywords?: string[];
+      summary?: string;
+      titleAliases?: string[];
       normalizedPath?: string;
     }>;
   },
   startDir = process.cwd()
-): Promise<{ deckMdPath: string; htmlPath: string }> {
+): Promise<{ deckMdPath: string; sourceLockPath: string }> {
   const paths = await getProjectPaths(startDir);
   const deckDir = join(paths.decks, slugify(deckId));
-  const distDir = join(deckDir, "dist");
-  await mkdir(distDir, { recursive: true });
+  await mkdir(deckDir, { recursive: true });
   await writeFile(join(deckDir, "deck.md"), payload.deckMarkdown, "utf8");
   await writeJson(join(deckDir, "sources.lock.json"), payload.sourceLock);
   await writeFile(join(deckDir, "outline.generated.md"), renderOutlineMarkdown(payload.outline), "utf8");
-  await writeFile(join(distDir, "index.html"), payload.html, "utf8");
 
   return {
     deckMdPath: join(deckDir, "deck.md"),
-    htmlPath: join(distDir, "index.html")
+    sourceLockPath: join(deckDir, "sources.lock.json")
   };
 }
