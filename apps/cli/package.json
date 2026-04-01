@@ -1,0 +1,17 @@
+{
+  "name": "@presentation/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "presentation": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "dependencies": {
+    "@presentation/pipeline": "0.1.0",
+    "@presentation/renderer-html": "0.1.0",
+    "commander": "^14.0.1"
+  }
+}
+

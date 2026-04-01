@@ -1,0 +1,18 @@
+{
+  "files": [],
+  "references": [
+    {
+      "path": "./packages/domain"
+    },
+    {
+      "path": "./packages/pipeline"
+    },
+    {
+      "path": "./packages/renderer-html"
+    },
+    {
+      "path": "./apps/cli"
+    }
+  ]
+}
+

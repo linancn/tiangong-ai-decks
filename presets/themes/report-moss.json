@@ -1,0 +1,22 @@
+{
+  "id": "report-moss",
+  "name": "Report Moss",
+  "fonts": {
+    "heading": "\"Geist\", \"Avenir Next\", \"Segoe UI\", sans-serif",
+    "body": "\"Geist\", \"Avenir Next\", \"Segoe UI\", sans-serif",
+    "mono": "\"Berkeley Mono\", \"SFMono-Regular\", \"SF Mono\", monospace"
+  },
+  "colors": {
+    "background": "#eef1ea",
+    "backgroundAlt": "#dde4d8",
+    "panel": "#fafdf6",
+    "panelAlt": "#edf3e6",
+    "text": "#1b231d",
+    "muted": "#637066",
+    "accent": "#4f7b56",
+    "accentSoft": "#d5e6d2",
+    "border": "#c3d1c0",
+    "shadow": "rgba(50, 72, 55, 0.14)"
+  }
+}
+

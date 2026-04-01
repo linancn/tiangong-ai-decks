@@ -1,0 +1,11 @@
+node_modules/
+dist/
+coverage/
+.DS_Store
+*.log
+
+content/indexes/*
+content/tmp/*
+decks/*/dist/
+decks/*/.cache/
+
