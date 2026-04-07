@@ -1,5 +1,10 @@
 export { buildDeckModel } from "./decks.js";
-export { loadDeckMarkdown, parseDeckMarkdown, renderDeckMarkdown, renderPublicDeckMarkdown } from "./deck-markdown.js";
+export {
+  createPublicDeckArtifact,
+  createReviewDeckArtifact,
+  loadDeckArtifact,
+  parseReviewDeckArtifact
+} from "./deck-artifacts.js";
 export {
   createDeckWorkspace,
   generateOutline,

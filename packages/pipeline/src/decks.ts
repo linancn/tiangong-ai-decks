@@ -2,7 +2,7 @@ import type { Deck, DeckBrief, DeckOutlineSection, DeckSlide, NormalizedDocument
 
 import { pickBulletPoints, slugify, summarize } from "./utils.js";
 
-function deriveSlideNotes(section: DeckOutlineSection, documents: Map<string, NormalizedDocument>): string | undefined {
+function deriveSlideNotes(section: DeckOutlineSection, documents: Map<string, NormalizedDocument>): string[] | undefined {
   const matches = section.sourceIds
     .map((sourceId) => documents.get(sourceId))
     .filter((entry): entry is NormalizedDocument => Boolean(entry))
@@ -12,7 +12,7 @@ function deriveSlideNotes(section: DeckOutlineSection, documents: Map<string, No
     return undefined;
   }
 
-  return matches.join("\n");
+  return matches;
 }
 
 export function buildDeckModel(
@@ -27,8 +27,8 @@ export function buildDeckModel(
     id: `content-${index + 1}-${slugify(section.title)}`,
     layout: index === outline.length - 1 ? "summary" : "content",
     title: section.title,
-    body: section.body,
-    bullets: pickBulletPoints(section.body, 4),
+    body: section.body.join("\n"),
+    bullets: pickBulletPoints(section.body.join("\n"), 4),
     sourceIds: section.sourceIds,
     notes: deriveSlideNotes(section, documentMap)
   }));
@@ -42,6 +42,7 @@ export function buildDeckModel(
     audience: brief.audience,
     generatedAt: new Date().toISOString(),
     sourceIds,
+    orchestration: brief.orchestration,
     outline,
     slides: [
       {
@@ -56,7 +57,6 @@ export function buildDeckModel(
         id: "agenda",
         layout: "agenda",
         title: "Agenda",
-        body: outline.map((section) => `- ${section.title}`).join("\n"),
         bullets: outline.map((section) => section.title),
         sourceIds: sourceIds.slice(0, 3)
       },

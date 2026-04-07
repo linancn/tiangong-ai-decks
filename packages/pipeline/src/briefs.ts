@@ -1,12 +1,23 @@
-import { access, mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 
-import matter from "gray-matter";
-
-import type { DeckBrief, DeckOutlineSection, DeckRenderHandoff, NormalizedDocument } from "@tiangong-ai-decks/domain";
+import type {
+  DeckBrief,
+  DeckBriefArtifact,
+  DeckOutlineArtifact,
+  DeckOutlineSection,
+  DeckRenderHandoff,
+  NormalizedDocument,
+  PublicDeckArtifact,
+  ReviewDeckArtifact,
+  WorkflowOrchestration
+} from "@tiangong-ai-decks/domain";
 
 import { getProjectPaths } from "./project.js";
-import { pickBulletPoints, slugify, stripMarkdown, summarize, writeJson } from "./utils.js";
+import { pickBulletPoints, readJson, slugify, summarize, writeJson } from "./utils.js";
+
+const BRIEF_SCHEMA_VERSION = 1;
+const OUTLINE_SCHEMA_VERSION = 1;
 
 async function exists(path: string): Promise<boolean> {
   try {
@@ -15,6 +26,234 @@ async function exists(path: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+function normalizeLines(lines: unknown): string[] {
+  if (!Array.isArray(lines)) {
+    return [];
+  }
+
+  return lines
+    .filter((entry): entry is string => typeof entry === "string")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function createDefaultOrchestration(): WorkflowOrchestration {
+  return {
+    enabled: true,
+    mode: "hybrid",
+    coordinator: "deck-orchestrator",
+    roles: [
+      {
+        id: "source-librarian",
+        purpose: "Inspect normalized sources and produce grounded source locks for downstream workers.",
+        inputs: ["content/normalized/*.json", "content/sources/**/meta.json"],
+        outputs: ["sources.lock.json"]
+      },
+      {
+        id: "storyliner",
+        purpose: "Turn the brief and locked sources into a structured outline.",
+        inputs: ["brief.json", "sources.lock.json"],
+        outputs: ["outline.json", "outline.generated.json"]
+      },
+      {
+        id: "review-editor",
+        purpose: "Assemble the review deck artifact from outline sections and normalized sources.",
+        inputs: ["brief.json", "outline.json", "content/normalized/*.json"],
+        outputs: ["deck.json"]
+      },
+      {
+        id: "renderer",
+        purpose: "Render the public deck artifact into HTML or other presentation targets.",
+        inputs: ["render.handoff.json", "deck.public.json", "sources.lock.json"],
+        outputs: ["index.html"]
+      },
+      {
+        id: "verifier",
+        purpose: "Run viewport and overflow checks against rendered HTML before handoff.",
+        inputs: ["render.handoff.json", "deck.public.json", "index.html"],
+        outputs: ["preview/index.html.png", "verification-report.json"]
+      }
+    ]
+  };
+}
+
+function createDefaultBriefSections(): DeckBriefArtifact["sections"] {
+  return [
+    {
+      id: "context",
+      title: "Context",
+      body: [
+        "Summarize why this deck exists and what the audience should understand by the end."
+      ]
+    },
+    {
+      id: "must-cover",
+      title: "Must Cover",
+      body: [
+        "Add the most important questions or decision points.",
+        "Add source ids after you import materials."
+      ]
+    },
+    {
+      id: "tone",
+      title: "Tone",
+      body: [
+        "Concise",
+        "Evidence-first",
+        "Report-oriented"
+      ]
+    },
+    {
+      id: "constraints",
+      title: "Constraints",
+      body: [
+        "Keep the deck between 6 and 10 slides.",
+        "Keep each content slide anchored to imported sources."
+      ]
+    }
+  ];
+}
+
+function createScaffoldOutlineSections(): DeckOutlineSection[] {
+  return [
+    {
+      id: "situation",
+      title: "Situation",
+      sourceIds: [],
+      body: [
+        "Summarize the current situation with evidence from imported sources."
+      ]
+    },
+    {
+      id: "signals",
+      title: "Signals",
+      sourceIds: [],
+      body: [
+        "Surface the most important findings."
+      ]
+    },
+    {
+      id: "recommendation",
+      title: "Recommendation",
+      sourceIds: [],
+      body: [
+        "Close with decisions, tradeoffs, or next steps."
+      ]
+    }
+  ];
+}
+
+function createBriefTemplate(deckId: string, title: string, theme: string): DeckBriefArtifact {
+  return {
+    schemaVersion: BRIEF_SCHEMA_VERSION,
+    deckId,
+    title,
+    subtitle: "",
+    objective: "State the business question or report objective.",
+    audience: "Internal stakeholders",
+    durationMinutes: 10,
+    theme,
+    sources: [],
+    sections: createDefaultBriefSections(),
+    orchestration: createDefaultOrchestration()
+  };
+}
+
+function createOutlineTemplate(deckId: string): DeckOutlineArtifact {
+  return {
+    schemaVersion: OUTLINE_SCHEMA_VERSION,
+    deckId,
+    status: "scaffold",
+    sections: createScaffoldOutlineSections()
+  };
+}
+
+function flattenBriefSections(sections: DeckBriefArtifact["sections"]): string | undefined {
+  const normalizedSections = sections
+    .map((section) => ({
+      id: slugify(section.id || section.title),
+      title: section.title.trim(),
+      body: normalizeLines(section.body)
+    }))
+    .filter((section) => section.title && section.body.length > 0);
+
+  if (normalizedSections.length === 0) {
+    return undefined;
+  }
+
+  const defaultSignature = JSON.stringify(createDefaultBriefSections().map((section) => ({
+    title: section.title,
+    body: section.body
+  })));
+  const sectionSignature = JSON.stringify(normalizedSections.map((section) => ({
+    title: section.title,
+    body: section.body
+  })));
+
+  if (sectionSignature === defaultSignature) {
+    return undefined;
+  }
+
+  return normalizedSections
+    .flatMap((section) => [section.title, ...section.body])
+    .join("\n")
+    .trim();
+}
+
+function normalizeOutlineSections(sections: unknown): DeckOutlineSection[] {
+  if (!Array.isArray(sections)) {
+    return [];
+  }
+
+  return sections
+    .map((section): DeckOutlineSection | null => {
+      if (!section || typeof section !== "object") {
+        return null;
+      }
+
+      const candidate = section as Record<string, unknown>;
+      const title = typeof candidate.title === "string" ? candidate.title.trim() : "";
+      const body = normalizeLines(candidate.body);
+      const sourceIds = Array.isArray(candidate.sourceIds)
+        ? candidate.sourceIds.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0)
+        : [];
+
+      if (!title || body.length === 0) {
+        return null;
+      }
+
+      return {
+        id: typeof candidate.id === "string" && candidate.id.trim() ? candidate.id.trim() : slugify(title),
+        title,
+        body,
+        sourceIds
+      };
+    })
+    .filter((section): section is DeckOutlineSection => Boolean(section));
+}
+
+function isScaffoldOutline(artifact: DeckOutlineArtifact, sections: DeckOutlineSection[]): boolean {
+  const scaffold = createScaffoldOutlineSections();
+  if (sections.length === 0) {
+    return true;
+  }
+
+  if (sections.length !== scaffold.length) {
+    return false;
+  }
+
+  const matchesScaffold = sections.every((section, index) => (
+    section.title === scaffold[index].title &&
+    JSON.stringify(section.body) === JSON.stringify(scaffold[index].body)
+  ));
+
+  if (artifact.status === "scaffold") {
+    return matchesScaffold;
+  }
+
+  return matchesScaffold;
 }
 
 export interface DeckWorkspaceResult {
@@ -37,60 +276,23 @@ export async function createDeckWorkspace(
   await mkdir(deckDir, { recursive: true });
   await mkdir(join(deckDir, "assets"), { recursive: true });
 
-  const briefPath = join(deckDir, "brief.md");
+  const briefPath = join(deckDir, "brief.json");
   if (!(await exists(briefPath))) {
-    const title = options.title ?? "Untitled deck";
-    const theme = options.theme ?? "editorial-light";
-    const briefTemplate = `---
-title: "${title}"
-subtitle: ""
-objective: "State the business question or report objective."
-audience: "Internal stakeholders"
-durationMinutes: 10
-theme: "${theme}"
-sources: []
----
-
-## Context
-Summarize why this deck exists and what the audience should understand by the end.
-
-## Must Cover
-- Add the most important questions or decision points.
-- Add source ids after you import materials.
-
-## Tone
-- Concise
-- Evidence-first
-- Report-oriented
-
-## Constraints
-- Keep the deck between 6 and 10 slides.
-- Keep each content slide anchored to imported sources.
-`;
-    await writeFile(briefPath, briefTemplate, "utf8");
-    created.push("brief.md");
+    await writeJson(
+      briefPath,
+      createBriefTemplate(
+        normalizedDeckId,
+        options.title ?? "Untitled deck",
+        options.theme ?? "editorial-light"
+      )
+    );
+    created.push("brief.json");
   }
 
-  const outlinePath = join(deckDir, "outline.md");
+  const outlinePath = join(deckDir, "outline.json");
   if (!(await exists(outlinePath))) {
-    const outlineTemplate = `# Outline
-
-<!-- Build will overwrite this file if it only contains the scaffold below. -->
-
-## Situation
-<!-- sources: -->
-- Summarize the current situation with evidence from imported sources.
-
-## Signals
-<!-- sources: -->
-- Surface the most important findings.
-
-## Recommendation
-<!-- sources: -->
-- Close with decisions, tradeoffs, or next steps.
-`;
-    await writeFile(outlinePath, outlineTemplate, "utf8");
-    created.push("outline.md");
+    await writeJson(outlinePath, createOutlineTemplate(normalizedDeckId));
+    created.push("outline.json");
   }
 
   return {
@@ -99,124 +301,53 @@ Summarize why this deck exists and what the audience should understand by the en
   };
 }
 
-export async function loadDeckBrief(deckId: string, startDir = process.cwd()): Promise<{ brief: DeckBrief; deckDir: string }> {
+export async function loadDeckBrief(
+  deckId: string,
+  startDir = process.cwd()
+): Promise<{ brief: DeckBrief; deckDir: string; briefPath: string }> {
   const paths = await getProjectPaths(startDir);
-  const deckDir = join(paths.decks, slugify(deckId));
-  const briefPath = join(deckDir, "brief.md");
-  const raw = await readFile(briefPath, "utf8");
-  const parsed = matter(raw);
-  const data = parsed.data as Record<string, unknown>;
-
-  const title = typeof data.title === "string" && data.title.trim() ? data.title.trim() : slugify(deckId);
-  const objective = typeof data.objective === "string" && data.objective.trim()
-    ? data.objective.trim()
-    : "Summarize the imported sources.";
-  const audience = typeof data.audience === "string" && data.audience.trim()
-    ? data.audience.trim()
-    : "Internal stakeholders";
-  const theme = typeof data.theme === "string" && data.theme.trim()
-    ? data.theme.trim()
-    : "editorial-light";
-  const sourceIds = Array.isArray(data.sources)
-    ? data.sources.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0)
+  const normalizedDeckId = slugify(deckId);
+  const deckDir = join(paths.decks, normalizedDeckId);
+  const briefPath = join(deckDir, "brief.json");
+  const artifact = await readJson<DeckBriefArtifact>(briefPath);
+  const sections = Array.isArray(artifact.sections)
+    ? artifact.sections.map((section) => ({
+      id: slugify(section.id || section.title),
+      title: section.title.trim(),
+      body: normalizeLines(section.body)
+    }))
     : [];
-  const cleanedNotes = normalizeBriefNotes(parsed.content);
+
+  const title = typeof artifact.title === "string" && artifact.title.trim() ? artifact.title.trim() : normalizedDeckId;
+  const objective = typeof artifact.objective === "string" && artifact.objective.trim()
+    ? artifact.objective.trim()
+    : "Summarize the imported sources.";
+  const audience = typeof artifact.audience === "string" && artifact.audience.trim()
+    ? artifact.audience.trim()
+    : "Internal stakeholders";
+  const theme = typeof artifact.theme === "string" && artifact.theme.trim()
+    ? artifact.theme.trim()
+    : "editorial-light";
+  const sources = Array.isArray(artifact.sources)
+    ? artifact.sources.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0)
+    : [];
 
   return {
     brief: {
       title,
-      subtitle: typeof data.subtitle === "string" && data.subtitle.trim() ? data.subtitle.trim() : undefined,
+      subtitle: typeof artifact.subtitle === "string" && artifact.subtitle.trim() ? artifact.subtitle.trim() : undefined,
       objective,
       audience,
-      durationMinutes: typeof data.durationMinutes === "number" ? data.durationMinutes : undefined,
+      durationMinutes: typeof artifact.durationMinutes === "number" ? artifact.durationMinutes : undefined,
       theme,
-      sources: sourceIds,
-      notes: cleanedNotes
+      sources,
+      sections,
+      notes: flattenBriefSections(sections),
+      orchestration: artifact.orchestration
     },
-    deckDir
+    deckDir,
+    briefPath
   };
-}
-
-function normalizeBriefNotes(input: string): string | undefined {
-  const cleaned = stripMarkdown(input);
-  if (!cleaned) {
-    return undefined;
-  }
-
-  const scaffoldMarkers = [
-    "Summarize why this deck exists and what the audience should understand by the end.",
-    "Add the most important questions or decision points.",
-    "Keep the deck between 6 and 10 slides."
-  ];
-
-  if (scaffoldMarkers.every((marker) => cleaned.includes(marker))) {
-    return undefined;
-  }
-
-  return cleaned;
-}
-
-function parseOutlineSections(raw: string): DeckOutlineSection[] {
-  const normalized = raw.replace(/\r/g, "");
-  const lines = normalized.split("\n");
-  const sections: DeckOutlineSection[] = [];
-  let currentTitle = "";
-  let currentLines: string[] = [];
-  let currentSources: string[] = [];
-
-  const push = () => {
-    if (!currentTitle) {
-      currentLines = [];
-      currentSources = [];
-      return;
-    }
-
-    const body = currentLines.join("\n").trim();
-    if (!body) {
-      currentLines = [];
-      currentSources = [];
-      return;
-    }
-
-    sections.push({
-      id: slugify(currentTitle),
-      title: currentTitle,
-      body,
-      sourceIds: currentSources
-    });
-    currentLines = [];
-    currentSources = [];
-  };
-
-  for (const line of lines) {
-    const heading = /^##\s+(.*)$/.exec(line);
-    if (heading) {
-      push();
-      currentTitle = heading[1].trim();
-      continue;
-    }
-
-    const sourceDirective = /^<!--\s*sources:\s*(.*?)\s*-->$/.exec(line.trim());
-    if (sourceDirective) {
-      currentSources = sourceDirective[1]
-        .split(",")
-        .map((entry) => entry.trim())
-        .filter(Boolean);
-      continue;
-    }
-
-    if (currentTitle) {
-      currentLines.push(line);
-    }
-  }
-
-  push();
-  return sections;
-}
-
-function isScaffoldOutline(sections: DeckOutlineSection[]): boolean {
-  const scaffoldTitles = new Set(["Situation", "Signals", "Recommendation"]);
-  return sections.length === 3 && sections.every((section) => scaffoldTitles.has(section.title));
 }
 
 export async function loadOrCreateOutline(
@@ -226,14 +357,15 @@ export async function loadOrCreateOutline(
   startDir = process.cwd()
 ): Promise<{ outline: DeckOutlineSection[]; deckDir: string; outlinePath: string; generated: boolean }> {
   const paths = await getProjectPaths(startDir);
-  const deckDir = join(paths.decks, slugify(deckId));
-  const outlinePath = join(deckDir, "outline.md");
-  const raw = await readFile(outlinePath, "utf8");
-  const parsed = parseOutlineSections(raw);
+  const normalizedDeckId = slugify(deckId);
+  const deckDir = join(paths.decks, normalizedDeckId);
+  const outlinePath = join(deckDir, "outline.json");
+  const artifact = await readJson<DeckOutlineArtifact>(outlinePath);
+  const sections = normalizeOutlineSections(artifact.sections);
 
-  if (parsed.length > 0 && !isScaffoldOutline(parsed)) {
+  if (sections.length > 0 && !isScaffoldOutline(artifact, sections)) {
     return {
-      outline: parsed,
+      outline: sections,
       deckDir,
       outlinePath,
       generated: false
@@ -241,7 +373,13 @@ export async function loadOrCreateOutline(
   }
 
   const generatedOutline = generateOutline(brief, documents);
-  await writeFile(outlinePath, renderOutlineMarkdown(generatedOutline), "utf8");
+  await writeJson(outlinePath, {
+    schemaVersion: OUTLINE_SCHEMA_VERSION,
+    deckId: normalizedDeckId,
+    status: "generated",
+    generatedAt: new Date().toISOString(),
+    sections: generatedOutline
+  } satisfies DeckOutlineArtifact);
 
   return {
     outline: generatedOutline,
@@ -262,15 +400,15 @@ export function generateOutline(brief: DeckBrief, documents: NormalizedDocument[
       id: "objective",
       title: "Objective",
       body: [
-        `- ${brief.objective}`,
-        brief.notes ? `- ${summarize(brief.notes, 180)}` : `- Audience: ${brief.audience}`
-      ].join("\n"),
+        brief.objective,
+        brief.notes ? summarize(brief.notes, 180) : `Audience: ${brief.audience}`
+      ],
       sourceIds: contentSlides.slice(0, 2).map((document) => document.id)
     }
   ];
 
   for (const document of contentSlides) {
-    const keyBullets = [
+    const sectionBullets = [
       ...pickBulletPoints(document.summary, 2),
       ...document.sections.slice(0, 2).map((section) => `${section.title}: ${summarize(section.content, 140)}`)
     ].slice(0, 3);
@@ -278,14 +416,14 @@ export function generateOutline(brief: DeckBrief, documents: NormalizedDocument[
     sections.push({
       id: slugify(document.title),
       title: document.title,
-      body: keyBullets.map((bullet) => `- ${bullet}`).join("\n"),
+      body: sectionBullets,
       sourceIds: [document.id]
     });
   }
 
   const takeawayLines = sections
     .slice(1)
-    .flatMap((section) => section.body.split("\n"))
+    .flatMap((section) => section.body)
     .filter((line) => line.trim().length > 0)
     .slice(0, 3);
 
@@ -293,38 +431,24 @@ export function generateOutline(brief: DeckBrief, documents: NormalizedDocument[
     id: "takeaways",
     title: "Takeaways",
     body: takeawayLines.length > 0
-      ? takeawayLines.join("\n")
+      ? takeawayLines
       : [
-        `- ${brief.objective}`,
-        `- Audience: ${brief.audience}`
-      ].join("\n"),
+        brief.objective,
+        `Audience: ${brief.audience}`
+      ],
     sourceIds: [...new Set(contentSlides.map((document) => document.id))]
   });
 
   return sections;
 }
 
-export function renderOutlineMarkdown(outline: DeckOutlineSection[]): string {
-  const blocks = outline.map((section) => {
-    const sourceIds = section.sourceIds.join(", ");
-    return [
-      `## ${section.title}`,
-      `<!-- sources: ${sourceIds} -->`,
-      section.body.trim(),
-      ""
-    ].join("\n");
-  });
-
-  return ["# Outline", "", ...blocks].join("\n").trim() + "\n";
-}
-
 export async function writeDeckArtifacts(
   deckId: string,
   payload: {
-    deckMarkdown: string;
-    publicDeckMarkdown: string;
+    reviewDeckArtifact: ReviewDeckArtifact;
+    publicDeckArtifact: PublicDeckArtifact;
     renderHandoff: DeckRenderHandoff;
-    outline: DeckOutlineSection[];
+    outlineArtifact: DeckOutlineArtifact;
     sourceLock: Array<{
       id: string;
       title?: string;
@@ -341,20 +465,33 @@ export async function writeDeckArtifacts(
     }>;
   },
   startDir = process.cwd()
-): Promise<{ deckMdPath: string; deckPublicMdPath: string; renderHandoffPath: string; sourceLockPath: string }> {
+): Promise<{
+  deckJsonPath: string;
+  deckPublicJsonPath: string;
+  renderHandoffPath: string;
+  sourceLockPath: string;
+  outlineGeneratedPath: string;
+}> {
   const paths = await getProjectPaths(startDir);
   const deckDir = join(paths.decks, slugify(deckId));
   await mkdir(deckDir, { recursive: true });
-  await writeFile(join(deckDir, "deck.md"), payload.deckMarkdown, "utf8");
-  await writeFile(join(deckDir, "deck.public.md"), payload.publicDeckMarkdown, "utf8");
-  await writeJson(join(deckDir, "render.handoff.json"), payload.renderHandoff);
-  await writeJson(join(deckDir, "sources.lock.json"), payload.sourceLock);
-  await writeFile(join(deckDir, "outline.generated.md"), renderOutlineMarkdown(payload.outline), "utf8");
+  const deckJsonPath = join(deckDir, "deck.json");
+  const deckPublicJsonPath = join(deckDir, "deck.public.json");
+  const renderHandoffPath = join(deckDir, "render.handoff.json");
+  const sourceLockPath = join(deckDir, "sources.lock.json");
+  const outlineGeneratedPath = join(deckDir, "outline.generated.json");
+
+  await writeJson(deckJsonPath, payload.reviewDeckArtifact);
+  await writeJson(deckPublicJsonPath, payload.publicDeckArtifact);
+  await writeJson(renderHandoffPath, payload.renderHandoff);
+  await writeJson(sourceLockPath, payload.sourceLock);
+  await writeJson(outlineGeneratedPath, payload.outlineArtifact);
 
   return {
-    deckMdPath: join(deckDir, "deck.md"),
-    deckPublicMdPath: join(deckDir, "deck.public.md"),
-    renderHandoffPath: join(deckDir, "render.handoff.json"),
-    sourceLockPath: join(deckDir, "sources.lock.json")
+    deckJsonPath,
+    deckPublicJsonPath,
+    renderHandoffPath,
+    sourceLockPath,
+    outlineGeneratedPath
   };
 }

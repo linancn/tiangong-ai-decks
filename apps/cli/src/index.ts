@@ -2,15 +2,16 @@
 
 import { Command } from "commander";
 
+import type { NormalizedDocument } from "@tiangong-ai-decks/domain";
+
 import {
   buildDeckModel,
+  createPublicDeckArtifact,
+  createReviewDeckArtifact,
   createDeckWorkspace,
   listNormalizedDocuments,
   loadDeckBrief,
   loadOrCreateOutline,
-  parseDeckMarkdown,
-  renderDeckMarkdown,
-  renderPublicDeckMarkdown,
   writeDeckArtifacts
 } from "@tiangong-ai-decks/pipeline";
 
@@ -18,15 +19,15 @@ const program = new Command();
 
 program
   .name("tiangong-ai-decks")
-  .description("Build reviewable Markdown decks from normalized source libraries prepared by skills.")
+  .description("Build reviewable JSON deck artifacts from normalized source libraries prepared by skills.")
   .version("0.1.0");
 
 program
   .command("new-deck")
-  .description("Create a new deck workspace with brief and outline scaffolds.")
+  .description("Create a new deck workspace with brief and outline JSON scaffolds.")
   .argument("<deckId>", "Deck identifier")
   .option("--title <title>", "Human-readable deck title")
-  .option("--theme <theme>", "Render-hint style string written into brief.md", "editorial-light")
+  .option("--theme <theme>", "Render-hint style string written into brief.json", "editorial-light")
   .action(async (deckId: string, options: { title?: string; theme?: string }) => {
     const result = await createDeckWorkspace(deckId, {
       title: options.title,
@@ -38,9 +39,9 @@ program
 
 program
   .command("build")
-  .description("Build review and public deck Markdown artifacts from archived sources.")
+  .description("Build review and public deck JSON artifacts from archived sources.")
   .argument("<deckId>", "Deck identifier")
-  .option("--theme <theme>", "Override the render-hint style string from brief.md")
+  .option("--theme <theme>", "Override the render-hint style string from brief.json")
   .action(async (deckId: string, options: { theme?: string }) => {
     const documents = await listNormalizedDocuments();
     const { brief } = await loadDeckBrief(deckId);
@@ -48,20 +49,35 @@ program
       brief.theme = options.theme;
     }
 
+    const unresolvedBriefSources = brief.sources.filter(
+      (sourceId: string) => !documents.some((document: NormalizedDocument) => document.id === sourceId)
+    );
+    if (unresolvedBriefSources.length > 0) {
+      throw new Error(`Missing normalized JSON for brief sources: ${unresolvedBriefSources.join(", ")}`);
+    }
+
     const outlineResult = await loadOrCreateOutline(deckId, brief, documents);
     const deck = buildDeckModel(deckId, brief, outlineResult.outline, documents);
-    const deckMarkdown = renderDeckMarkdown(deck);
-    const publicDeckMarkdown = renderPublicDeckMarkdown(deck);
-    const roundTrippedDeck = parseDeckMarkdown(deckMarkdown);
+    const reviewDeckArtifact = createReviewDeckArtifact(deck);
+    const publicDeckArtifact = createPublicDeckArtifact(deck);
+    const roundTrippedDeck = reviewDeckArtifact;
+    const unresolvedDeckSources = roundTrippedDeck.sourceIds.filter(
+      (sourceId: string) => !documents.some((document: NormalizedDocument) => document.id === sourceId)
+    );
+    if (unresolvedDeckSources.length > 0) {
+      throw new Error(`Missing normalized JSON for outline/deck sources: ${unresolvedDeckSources.join(", ")}`);
+    }
+
     const renderHandoff = {
       schemaVersion: 1,
       deckId: roundTrippedDeck.id,
       title: roundTrippedDeck.title,
-      displayArtifact: "deck.public.md",
-      reviewArtifact: "deck.md",
-      briefPath: "brief.md",
+      displayArtifact: "deck.public.json",
+      reviewArtifact: "deck.json",
+      briefPath: "brief.json",
       sourceLockPath: "sources.lock.json",
       themeHint: brief.theme,
+      orchestration: brief.orchestration,
       rules: {
         publicOnly: true,
         includeSpeakerNotes: false,
@@ -70,8 +86,8 @@ program
         fallbackToReviewArtifact: "never-by-default" as const
       }
     };
-    const sourceLock = roundTrippedDeck.sourceIds.map((sourceId) => {
-      const document = documents.find((entry) => entry.id === sourceId);
+    const sourceLock = roundTrippedDeck.sourceIds.map((sourceId: string) => {
+      const document = documents.find((entry: NormalizedDocument) => entry.id === sourceId);
       return {
         id: sourceId,
         title: document?.title,
@@ -88,20 +104,26 @@ program
       };
     });
     const artifacts = await writeDeckArtifacts(deckId, {
-      deckMarkdown,
-      publicDeckMarkdown,
+      reviewDeckArtifact,
+      publicDeckArtifact,
       renderHandoff,
-      outline: outlineResult.outline,
+      outlineArtifact: {
+        schemaVersion: 1,
+        deckId: roundTrippedDeck.id,
+        status: outlineResult.generated ? "generated" : "curated",
+        generatedAt: new Date().toISOString(),
+        sections: outlineResult.outline
+      },
       sourceLock
     });
 
     console.log(`Built deck ${roundTrippedDeck.id}`);
     console.log(`Outline ${outlineResult.generated ? "generated" : "loaded"} from ${outlineResult.outlinePath}`);
-    console.log(`Deck Markdown: ${artifacts.deckMdPath}`);
-    console.log(`Public Deck Markdown: ${artifacts.deckPublicMdPath}`);
+    console.log(`Deck JSON: ${artifacts.deckJsonPath}`);
+    console.log(`Public Deck JSON: ${artifacts.deckPublicJsonPath}`);
     console.log(`Render Handoff: ${artifacts.renderHandoffPath}`);
     console.log(`Source Lock: ${artifacts.sourceLockPath}`);
-    console.log("HTML rendering is external to this repository. Renderers should read render.handoff.json and use deck.public.md by default.");
+    console.log("HTML rendering is external to this repository. Renderers and orchestration workers should read render.handoff.json and use deck.public.json by default.");
   });
 
 program

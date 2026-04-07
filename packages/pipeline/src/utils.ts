@@ -243,6 +243,10 @@ export function classifyContentType(input: {
     return "repository";
   }
 
+  if (input.kind === "pptx") {
+    return "presentation";
+  }
+
   const sample = `${input.title}\n${input.text}`.toLowerCase();
   const rules: Array<{ type: SelectionContentType; pattern: RegExp }> = [
     {

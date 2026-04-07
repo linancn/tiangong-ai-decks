@@ -24,7 +24,15 @@ export type ArchiveTitleSource =
   | "repo-name"
   | "manual"
   | (string & {});
-export type SelectionContentType = "notes" | "report" | "research" | "spec" | "documentation" | "repository" | "reference";
+export type SelectionContentType =
+  | "notes"
+  | "report"
+  | "research"
+  | "spec"
+  | "documentation"
+  | "repository"
+  | "reference"
+  | "presentation";
 
 export interface SourceFingerprint {
   checksum: string;
@@ -117,6 +125,26 @@ export interface NormalizedDocument {
   extractedAt: string;
 }
 
+export interface WorkflowRole {
+  id: string;
+  purpose: string;
+  inputs: string[];
+  outputs: string[];
+}
+
+export interface WorkflowOrchestration {
+  enabled: boolean;
+  mode: "single-agent" | "parallel" | "sequential" | "hybrid";
+  coordinator?: string;
+  roles: WorkflowRole[];
+}
+
+export interface BriefSection {
+  id: string;
+  title: string;
+  body: string[];
+}
+
 export interface DeckBrief {
   title: string;
   subtitle?: string;
@@ -125,7 +153,14 @@ export interface DeckBrief {
   durationMinutes?: number;
   theme: string;
   sources: string[];
+  sections: BriefSection[];
   notes?: string;
+  orchestration?: WorkflowOrchestration;
+}
+
+export interface DeckBriefArtifact extends DeckBrief {
+  schemaVersion: number;
+  deckId: string;
 }
 
 export type SlideLayout =
@@ -143,14 +178,22 @@ export interface DeckSlide {
   body?: string;
   bullets?: string[];
   sourceIds: string[];
-  notes?: string;
+  notes?: string[];
 }
 
 export interface DeckOutlineSection {
   id: string;
   title: string;
-  body: string;
+  body: string[];
   sourceIds: string[];
+}
+
+export interface DeckOutlineArtifact {
+  schemaVersion: number;
+  deckId: string;
+  status: "scaffold" | "generated" | "curated";
+  generatedAt?: string;
+  sections: DeckOutlineSection[];
 }
 
 export interface Deck {
@@ -162,8 +205,42 @@ export interface Deck {
   audience: string;
   generatedAt: string;
   sourceIds: string[];
+  orchestration?: WorkflowOrchestration;
   outline: DeckOutlineSection[];
   slides: DeckSlide[];
+}
+
+export interface ReviewDeckArtifact extends Deck {
+  schemaVersion: number;
+  artifactKind: "review";
+}
+
+export interface PublicDeckSlide {
+  id: string;
+  layout: SlideLayout;
+  title: string;
+  kicker?: string;
+  body?: string;
+  bullets?: string[];
+  sourceIds: string[];
+}
+
+export interface PublicDeck {
+  id: string;
+  title: string;
+  subtitle?: string;
+  theme: string;
+  objective: string;
+  audience: string;
+  generatedAt: string;
+  sourceIds: string[];
+  orchestration?: WorkflowOrchestration;
+  slides: PublicDeckSlide[];
+}
+
+export interface PublicDeckArtifact extends PublicDeck {
+  schemaVersion: number;
+  artifactKind: "public";
 }
 
 export interface DeckRenderHandoff {
@@ -175,6 +252,16 @@ export interface DeckRenderHandoff {
   briefPath: string;
   sourceLockPath: string;
   themeHint?: string;
+  orchestration?: WorkflowOrchestration;
+  qualityGates?: {
+    playwrightLayoutCheckRequired: boolean;
+    minimumViewports: Array<{
+      name: string;
+      width: number;
+      height: number;
+    }>;
+    failOn: string[];
+  };
   rules: {
     publicOnly: boolean;
     includeSpeakerNotes: boolean;

@@ -1,16 +1,16 @@
 # Content Library
 
-`content/` stores long-lived source material and normalized artifacts.
+`content/` stores long-lived source material and normalized JSON artifacts.
 
 - `inbox/`: disposable drop zone for raw files before archival. Ignored by Git except for `.gitkeep`.
 - `inbox/` should be processed by the appropriate preprocessing skill or agent workflow. Successful local imports should be cleared from inbox afterward.
 - `sources/`: immutable imported snapshots grouped by kind and year. Each source lives under `content/sources/<kind>/<year>/<archive-key>/`.
 - For `pptx` archives, extracted slide media should live beside the original file under `content/sources/pptx/<year>/<archive-key>/media/` with a companion `index.json`.
-- `normalized/`: machine-readable documents generated from imported sources.
+- `normalized/`: machine-readable `NormalizedDocument` JSON files generated from imported sources.
 - `library/`: future derived facts, quotes, tables, cross-source visuals, generated visuals, and code insights.
 - `indexes/`: search and retrieval indexes. Safe to rebuild.
 - User files under these working directories are intentionally gitignored by default. Only scaffolding files such as `.gitkeep` and this README should be versioned.
-- The repository does not parse raw source files itself. Skills and agent workflows should write into this structure.
+- The repository does not parse raw source files itself. Skills, workers, and agent workflows should write into this structure.
 
 Archive key format:
 
